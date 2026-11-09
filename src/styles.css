@@ -109,8 +109,6 @@ h3:first-child { margin-top: 4px; }
 .info th { text-align: left; color: var(--muted); font-weight: 500; padding: 3px 10px 3px 0; white-space: nowrap; vertical-align: top; }
 .info td { padding: 3px 0; word-break: break-word; }
 .calib { right: 64px; top: 10px; width: min(320px, calc(100% - 84px)); max-height: calc(100% - 20px); overflow: auto; }
-.calib label { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 14px; margin: 8px 0; }
-.calib input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
 .calib output { color: var(--accent); font-variant-numeric: tabular-nums; }
 .toast { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); background: rgba(10,16,28,.94); border: 1px solid var(--accent); padding: 10px 14px; border-radius: 12px; font-size: 14px; max-width: calc(100% - 40px); text-align: center; z-index: 10; }
 [hidden] { display: none !important; }
@@ -128,3 +126,40 @@ h3:first-child { margin-top: 4px; }
   .sheet { width: auto; height: 46%; border-left: none; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
   .modes button { padding: 8px 10px; }
 }
+
+/* ---------------- AR-Modus: Vollbild + Bedienleiste ---------------- */
+.ar-bar { display: none; }
+body.ar .topbar { display: none; }
+body.ar .layout { inset: 0; }
+body.ar .overlay-tools { display: none; }
+body.ar .ar-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 6px;
+  padding: 8px 8px max(10px, env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, rgba(5, 9, 18, .85) 35%);
+}
+.ar-bar button {
+  flex: 1 1 0; max-width: 96px; min-height: 58px; flex-direction: column; gap: 2px; justify-content: center;
+  padding: 6px 4px; background: rgba(13, 20, 34, .88); border-radius: 14px;
+}
+.ar-bar button span { font-size: 20px; line-height: 1; }
+.ar-bar button small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ar-bar button.active small { color: var(--accent); }
+.ar-bar button.danger { border-color: rgba(229, 57, 53, .6); }
+body.ar .hud { top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); right: 10px; }
+body.ar .info { bottom: calc(86px + env(safe-area-inset-bottom)); }
+body.ar .calib {
+  top: auto; right: 8px; left: 8px; width: auto; margin: 0 auto; max-width: 480px;
+  bottom: calc(84px + env(safe-area-inset-bottom)); max-height: 62%;
+}
+body.ar .toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
+body.ar:not(.sheet-hidden) .sheet { height: 40%; }
+/* Kamera-AR mit eingeblendeter Karte: Panel unten, Leiste darüber bleibt bedienbar */
+@media (min-width: 861px) { body.ar:not(.sheet-hidden) .sheet { height: auto; } }
+
+/* Justier-Zeilen */
+.calib-row { margin: 10px 0; }
+.calib-label { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; }
+.calib-ctl { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; align-items: center; }
+.calib-ctl button { height: 40px; justify-content: center; padding: 0; font-size: 20px; touch-action: none; user-select: none; }
+.calib-ctl input[type="range"] { width: 100%; accent-color: var(--accent); }
+.calib .field { margin-top: 12px; }

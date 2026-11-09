@@ -16,7 +16,7 @@
       <div class="modes">
         <button id="btn-camera" class="primary" title="Kamera-AR mit GPS und Kompass">📷 AR</button>
         <button id="btn-xr" class="primary" hidden title="WebXR mit Raumverfolgung (Android/Chrome)">🥽 WebXR</button>
-        <button id="btn-preview" hidden>✕ AR beenden</button>
+
       </div>
     </header>
 
@@ -27,6 +27,7 @@
             <div class="hud-row">
               <span id="hud-gps" class="pill">GPS: –</span>
               <span id="hud-heading" class="pill">Kompass: –</span>
+              <span id="hud-height" class="pill">Höhe: –</span>
               <span id="hud-mode" class="pill">3D-Vorschau</span>
             </div>
             <div id="hud-nearest" class="nearest" hidden></div>
@@ -34,29 +35,38 @@
 
           <div class="overlay-tools">
             <button id="btn-calib" title="Kalibrierung">🎯</button>
-            <button id="btn-realign" hidden title="XR neu ausrichten">🧭</button>
             <button id="btn-labels" class="active" title="Beschriftungen">🏷️</button>
             <button id="btn-grid" title="Bodenraster">#</button>
             <button id="btn-sheet" title="Panel ein/aus">☰</button>
           </div>
 
+          <div class="ar-bar">
+            <button id="ar-exit" class="danger"><span>✕</span><small>Beenden</small></button>
+            <button id="ar-lock"><span>📌</span><small>Position halten</small></button>
+            <button id="ar-calib"><span>🎯</span><small>Justieren</small></button>
+            <button id="btn-realign" hidden><span>🧭</span><small>Ausrichten</small></button>
+            <button id="ar-labels" class="active"><span>🏷️</span><small>Text</small></button>
+            <button id="ar-map"><span>🗺️</span><small>Karte</small></button>
+          </div>
+
           <div id="calib-card" class="card calib" hidden>
-            <div class="card-head"><b>Kalibrierung</b><button class="link" id="calib-close">✕</button></div>
-            <p class="hint">Daten am Gelände ausrichten: an einem bekannten Punkt (z. B. Schachtdeckel) Drehung und Verschiebung anpassen.</p>
-            <label>Drehung <output data-for="heading"></output>
-              <input type="range" data-calib="heading" min="-45" max="45" step="0.5" /></label>
-            <label>Ost ↔ <output data-for="east"></output>
-              <input type="range" data-calib="east" min="-10" max="10" step="0.05" /></label>
-            <label>Nord ↕ <output data-for="north"></output>
-              <input type="range" data-calib="north" min="-10" max="10" step="0.05" /></label>
-            <label>Gelände-Höhe <output data-for="height"></output>
-              <input type="range" data-calib="height" min="-3" max="3" step="0.05" /></label>
-            <label>Gerätehöhe <output data-for="eye"></output>
-              <input type="range" data-calib="eye" min="0.5" max="2.5" step="0.05" /></label>
-            <label>Kamera-Sichtfeld <output data-for="fov"></output>
-              <input type="range" data-calib="fov" min="40" max="100" step="0.5" /></label>
+            <div class="card-head"><b>Justieren</b><button class="link" id="calib-close">✕</button></div>
+            <p class="hint">Tipp: Auf einen bekannten Punkt stellen (Schachtdeckel), Objekt antippen und „Gewähltes Objekt = hier“ drücken. Danach nur noch die Drehung feinjustieren.</p>
             <div class="row">
-              <button id="calib-snap" title="Ausgewähltes Objekt auf meinen Standort schieben">📍 Gewähltes Objekt = hier</button>
+              <button id="calib-snap">📍 Gewähltes Objekt = hier</button>
+              <button id="calib-compass" title="Kompass-Nachführung neu starten">🧭 Kompass neu</button>
+            </div>
+            <div id="calib-rows"></div>
+            <label class="field">Höhenbezug (Straßen-/Geländehöhe)
+              <select id="height-mode">
+                <option value="dgm">Geländemodell (empfohlen)</option>
+                <option value="gps">Geländemodell + GPS-Höhe</option>
+                <option value="flat">Eben (ohne Höhe)</option>
+              </select>
+            </label>
+            <p id="height-info" class="hint"></p>
+            <div class="row">
+              <button id="height-reset">↺ Höhe neu bestimmen</button>
               <button id="calib-reset">Zurücksetzen</button>
             </div>
           </div>

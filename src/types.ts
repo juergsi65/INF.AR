@@ -27,6 +27,10 @@ export interface InfraProps {
   diameter: number;
   /** Breite in Metern (nur Trasse). */
   width?: number;
+  /** Geländehöhe (m ü. A.) je Stützpunkt – aus den Daten oder dem Geländemodell. */
+  elev?: number[];
+  /** Geländeoberkante als Einzelwert (m ü. A.), falls in den Daten vorhanden. */
+  gok?: number | string;
   material?: string;
   operator?: string;
   note?: string;
@@ -47,6 +51,8 @@ export interface InfraProject {
   id: string;
   name: string;
   updatedAt: string;
+  /** Demo-Projekt: wird automatisch an den aktuellen Standort verschoben. */
+  demo?: boolean;
   features: InfraFeature[];
 }
 

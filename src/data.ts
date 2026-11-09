@@ -256,7 +256,30 @@ export function createDemoProject(center: LatLon): InfraProject {
       kind: "schacht", medium: "telekom", name: "LWL-Handloch", depth: 0.9, diameter: 600,
     }),
   ];
-  return { id: uid("p"), name: "Demo-Netz", updatedAt: new Date().toISOString(), features };
+  return { id: DEMO_ID, name: "Demo-Netz (Standort)", demo: true, updatedAt: new Date().toISOString(), features };
+}
+
+export const DEMO_ID = "demo";
+
+/** Erkennt Demo-Projekte (auch ältere, die noch kein `demo`-Flag haben). */
+export function isDemoProject(p: InfraProject): boolean {
+  return !!p.demo || p.id === DEMO_ID || p.name === "Demo-Netz" || /^Demo \d/.test(p.name);
+}
+
+/** Mittelpunkt (Mittel aller Stützpunkte) eines Projekts. */
+export function projectCenter(p: InfraProject): LatLon | null {
+  let lat = 0;
+  let lon = 0;
+  let n = 0;
+  for (const f of p.features) {
+    const pts = f.geometry.type === "Point" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const c of pts) {
+      lon += c[0];
+      lat += c[1];
+      n++;
+    }
+  }
+  return n ? { lat: lat / n, lon: lon / n } : null;
 }
 
 // ---------------------------------------------------------------------------

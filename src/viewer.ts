@@ -44,9 +44,21 @@ export class Viewer {
 
   mode: Mode = "preview";
   calib: Calibration = { ...DEFAULT_CALIBRATION };
-  /** Standort in Projekt-ENU-Metern. */
+  /** Standort in Projekt-ENU-Metern (geglättet, wird jedem Frame Richtung `userTarget` nachgeführt). */
   user = { e: 0, n: 0 };
+  /** Neuer Standort laut GPS. */
+  userTarget = { e: 0, n: 0 };
+  /** Höhe der Daten relativ zum Boden am Standort (Gelände-/GPS-Höhe), Ziel und geglätteter Wert. */
+  terrainOffsetTarget = 0;
+  terrainOffset = 0;
+  /** WebXR: erkannte Bodenhöhe im XR-Raum (null = noch nicht erkannt). */
+  xrGround: number | null = null;
+  xrGroundSamples = 0;
   showGrid = false;
+  private lastFrame = 0;
+  private hitTestSource: XRHitTestSource | null = null;
+  private groundBuffer: number[] = [];
+  private wakeLock: { release(): Promise<void> } | null = null;
 
   onSelect: (id: string | null) => void = () => {};
   onFrame: () => void = () => {};
@@ -110,6 +122,12 @@ export class Viewer {
     this.renderer.setAnimationLoop((t, frame) => this.render(t, frame));
   }
 
+  /** Standort setzen; `snap` springt sofort (z. B. erster Fix, manuelle Position). */
+  setUser(e: number, n: number, snap = false) {
+    this.userTarget = { e, n };
+    if (snap || Math.hypot(e - this.user.e, n - this.user.n) > 40) this.user = { e, n };
+  }
+
   setContent(built: BuiltScene) {
     if (this.built) {
       this.content.remove(this.built.root);
@@ -139,8 +157,16 @@ export class Viewer {
   // Modi
   // -------------------------------------------------------------------------
 
+  /** Hinweis, falls die Lagesensoren nicht verfügbar sind (AR läuft dann ohne Bewegungsnachführung). */
+  sensorWarning: string | null = null;
+
   async startCamera() {
-    await this.orientation.start();
+    this.sensorWarning = null;
+    try {
+      await this.orientation.start();
+    } catch (e) {
+      this.sensorWarning = (e as Error).message;
+    }
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Kamera nicht verfügbar (HTTPS erforderlich)");
     this.stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -149,6 +175,7 @@ export class Viewer {
     this.video.srcObject = this.stream;
     await this.video.play().catch(() => {});
     this.setMode("camera");
+    void this.keepAwake();
   }
 
   static async xrSupported(): Promise<boolean> {
@@ -163,13 +190,23 @@ export class Viewer {
     await this.orientation.start().catch(() => {});
     const session = await navigator.xr!.requestSession("immersive-ar", {
       requiredFeatures: ["local-floor"],
-      optionalFeatures: ["dom-overlay"],
+      optionalFeatures: ["dom-overlay", "hit-test"],
       domOverlay: { root: this.xrOverlay },
     } as XRSessionInit);
     this.renderer.xr.setReferenceSpaceType("local-floor");
     await this.renderer.xr.setSession(session);
     this.xrSession = session;
     this.xrNeedsAlign = true;
+    this.xrGround = null;
+    this.xrGroundSamples = 0;
+    this.groundBuffer = [];
+    try {
+      const viewerSpace = await session.requestReferenceSpace("viewer");
+      this.hitTestSource = (await session.requestHitTestSource?.({ space: viewerSpace })) ?? null;
+    } catch {
+      this.hitTestSource = null; // Bodenerkennung nicht verfügbar → local-floor (y = 0)
+    }
+    void this.keepAwake();
     const controller = this.renderer.xr.getController(0);
     controller.addEventListener("select", () => {
       this.raycaster.setFromXRController(controller);
@@ -178,6 +215,8 @@ export class Viewer {
     this.scene.add(controller);
     session.addEventListener("end", () => {
       this.scene.remove(controller);
+      this.hitTestSource?.cancel();
+      this.hitTestSource = null;
       this.xrSession = null;
       this.setMode("preview");
     });
@@ -189,7 +228,18 @@ export class Viewer {
     this.xrNeedsAlign = true;
   }
 
+  private async keepAwake() {
+    try {
+      const wl = (navigator as unknown as { wakeLock?: { request(t: "screen"): Promise<{ release(): Promise<void> }> } }).wakeLock;
+      this.wakeLock = (await wl?.request("screen")) ?? null;
+    } catch {
+      /* nicht unterstützt */
+    }
+  }
+
   stopAR() {
+    void this.wakeLock?.release().catch(() => {});
+    this.wakeLock = null;
     if (this.xrSession) void this.xrSession.end();
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
@@ -235,14 +285,52 @@ export class Viewer {
     return (2 * Math.atan(ch / 2 / (focal * s))) / D;
   }
 
-  private applyContentTransform() {
+  private applyContentTransform(dt: number) {
+    // Position und Höhe weich nachführen → kein Springen bei jedem GPS-Update
+    const k = 1 - Math.exp(-dt / 0.9);
+    this.user.e += (this.userTarget.e - this.user.e) * k;
+    this.user.n += (this.userTarget.n - this.user.n) * k;
+    const kh = 1 - Math.exp(-dt / 1.5);
+    this.terrainOffset += (this.terrainOffsetTarget - this.terrainOffset) * kh;
+
     const c = this.calib;
-    this.content.position.set(-(this.user.e) + c.east, c.height, this.user.n - c.north);
-    this.userMarker.position.set(0, c.height, 0);
+    const base = this.mode === "xr" ? (this.xrGround ?? 0) : 0;
+    this.content.position.set(-this.user.e + c.east, base + this.terrainOffset + c.height, this.user.n - c.north);
+    this.userMarker.position.set(0, base, 0);
+    this.grid.position.y = base + 0.005;
   }
 
-  private render(_t: number, frame?: XRFrame) {
-    this.applyContentTransform();
+  /** WebXR-Bodenerkennung: Treffer unterhalb der Kamera auf waagrechten Flächen sammeln (Median). */
+  private detectGround(frame: XRFrame) {
+    if (!this.hitTestSource) return;
+    const ref = this.renderer.xr.getReferenceSpace();
+    if (!ref) return;
+    const viewerPose = frame.getViewerPose(ref);
+    if (!viewerPose) return;
+    const camY = viewerPose.transform.position.y;
+    for (const hit of frame.getHitTestResults(this.hitTestSource)) {
+      const pose = hit.getPose(ref);
+      if (!pose) continue;
+      const o = pose.transform.orientation;
+      const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(new THREE.Quaternion(o.x, o.y, o.z, o.w));
+      const y = pose.transform.position.y;
+      if (normal.y > 0.9 && camY - y > 0.6 && camY - y < 2.5) {
+        this.groundBuffer.push(y);
+        if (this.groundBuffer.length > 60) this.groundBuffer.shift();
+        this.xrGroundSamples++;
+      }
+      break;
+    }
+    if (this.groundBuffer.length >= 5) {
+      const sorted = [...this.groundBuffer].sort((a, b) => a - b);
+      this.xrGround = sorted[Math.floor(sorted.length / 2)];
+    }
+  }
+
+  private render(t: number, frame?: XRFrame) {
+    const dt = this.lastFrame ? Math.min(0.25, (t - this.lastFrame) / 1000) : 0.016;
+    this.lastFrame = t;
+    this.applyContentTransform(dt);
     this.grid.visible = this.mode === "preview" || this.showGrid;
 
     if (this.mode === "camera") {
@@ -253,6 +341,7 @@ export class Viewer {
       if (this.orientation.ready) this.orientation.getQuaternion(this.camera.quaternion);
       this.anchor.rotation.y = -this.calib.heading * D;
     } else if (this.mode === "xr") {
+      if (frame) this.detectGround(frame);
       this.anchor.rotation.y = (this.xrYaw - this.calib.heading) * D;
     } else if (this.mode === "preview") {
       this.anchor.rotation.y = -this.calib.heading * D;

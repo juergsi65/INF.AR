@@ -11,9 +11,11 @@ Läuft im Browser auf dem Smartphone (iOS & Android), ohne App-Store, gehostet a
 |---|---|
 | **AR-Modi** | 📷 **Kamera-AR** (Kamera + GPS + Kompass, iOS & Android) · 🥽 **WebXR** (Android/Chrome, stabile Raumverfolgung) · 3D-Vorschau am Desktop |
 | **Darstellung** | Rohre & Kabel als 3D-Körper in echter Tiefe und Dimension, Trassen als Graben-Volumen, Schächte mit Deckel, Wand und Sohle, Lotlinien und „Sprühmarkierung“ an der Oberfläche, Beschriftungen |
+| **Demo** | Demo-Netz entsteht immer am echten Standort und wandert mit, wenn du über 150 m entfernt bist |
 | **Daten** | GeoJSON-Import (Point/LineString/Multi*/Polygon), automatische Erkennung von Sparte, Tiefe, DN, Material aus beliebigen Attributnamen (`sparte`, `tiefe`, `dn`, `durchmesser` …), Gefälle über `depths` je Stützpunkt, Export |
 | **Koordinaten** | WGS84, **AT** MGI/GK M28/M31/M34 & Austria Lambert, **DE** UTM 32/33, DHDN GK4, **CH** LV95, Web Mercator – auch automatisch aus dem GeoJSON-`crs` |
-| **Genauigkeit** | GPS-Glättung (Kalman), Kalibrierung (Drehung, Verschiebung, Höhe, Sichtfeld), „Gewähltes Objekt = hier“ zum Einpassen an einem Schachtdeckel, Standort manuell in der Karte setzen |
+| **Genauigkeit** | Sensorfusion (ruhige Kreisel-Lage + langsam nachgeführter Kompass), GPS-Glättung (Kalman) mit weicher Nachführung, „📌 Position halten“, Justieren mit −/＋ (Drehung, Verschiebung, Höhe, Sichtfeld), „Gewähltes Objekt = hier“ zum Einpassen an einem Schachtdeckel, Standort manuell in der Karte setzen |
+| **Höhe / Gelände** | Straßen- und Geländehöhe aus dem Copernicus-Geländemodell (Open-Meteo) für jeden Stützpunkt und den Standort → Gefälle wird berücksichtigt. Optional zusätzlich GPS-Höhe (relativ). In WebXR echte Bodenerkennung per Hit-Test. Eigene Höhen in den Daten (`gok`, `elev`) haben Vorrang |
 | **Vor Ort** | Anzeige der nächsten Leitung mit Abstand und Tiefe, Warnung unter 1 m, Antippen für Details, Filter nach Sparte und Objektart |
 | **Karte** | OpenStreetMap, Esri-Luftbild, basemap.at-Orthofoto |
 | **Cloud** | Optional: Projekte in Cloudflare KV speichern, geschützt per Token |
@@ -86,16 +88,20 @@ GeoJSON in beliebigem der unterstützten Koordinatensysteme. Beispiel: [`public/
 | `depths` | Tiefe je Stützpunkt (z. B. Kanalgefälle) | – |
 | `diameter` | Durchmesser in mm | `dn`, `durchmesser`, `nennweite` |
 | `width` | Trassenbreite in m | `breite` |
+| `gok` | Geländeoberkante in m ü. A. (sonst Geländemodell) | – |
+| `elev` | Geländehöhe je Stützpunkt in m ü. A. | – |
 | `name`, `material`, `operator` | Beschriftung und Infos | `bezeichnung`, `werkstoff`, `betreiber` |
 
 Punkte werden als Schacht dargestellt, Linien standardmäßig als Rohr.
 
 ## Vor Ort: so wird es genau
 
-1. **GPS** braucht freie Sicht zum Himmel. Die Genauigkeit steht im HUD (grün ≤ 5 m).
-2. Zu einem **bekannten Punkt** gehen (Schachtdeckel, Hydrant), das Objekt antippen und in der 🎯 Kalibrierung **„Gewähltes Objekt = hier“** drücken. Damit ist der GPS-Versatz weg.
-3. Mit **Drehung** den Kompass-Fehler ausgleichen, bis die Linien mit sichtbaren Merkmalen (Deckel, Markierungen) übereinstimmen.
-4. Bei WebXR nach größeren Bewegungen mit 🧭 neu ausrichten.
+1. **GPS** braucht freie Sicht zum Himmel. Die Genauigkeit steht oben im Bild (grün ≤ 5 m). Steht dort „kein Nord!“, liefert das Gerät keinen Kompass, dann über die Drehung ausrichten.
+2. **📌 Position halten**, sobald du stehst: Die Daten bleiben fix und springen nicht mehr mit dem GPS.
+3. Zu einem **bekannten Punkt** gehen (Schachtdeckel, Hydrant), das Objekt antippen und in der 🎯 Kalibrierung **„Gewähltes Objekt = hier“** drücken. Damit ist der GPS-Versatz weg.
+4. Mit **Drehung** den Kompass-Fehler ausgleichen, bis die Linien mit sichtbaren Merkmalen (Deckel, Markierungen) übereinstimmen.
+5. **Höhe:** Standard ist das Geländemodell. Bei Rampen oder Brücken „Geländemodell + GPS-Höhe“ probieren, bei Abweichungen mit „Gelände-Höhe“ korrigieren. „Gerätehöhe über Boden“ auf die tatsächliche Haltehöhe setzen.
+6. Bei WebXR nach größeren Bewegungen mit 🧭 neu ausrichten.
 
 ## Projektstruktur
 
@@ -105,6 +111,7 @@ src/
   viewer.ts     three.js-Renderer, Modi (Vorschau / Kamera-AR / WebXR), Kalibrierung, Picking
   scene.ts      3D-Geometrie aus Leitungsdaten
   sensors.ts    GPS (Kalman) und Lage-/Kompasssensor (Android & iOS)
+  terrain.ts    Geländehöhen (Copernicus-DGM via Open-Meteo, Interpolation)
   geo.ts        Koordinatensysteme (proj4), lokales Ost/Nord-System
   data.ts       Import/Normalisierung, Demo-Netz, lokale & Cloud-Speicherung
   map.ts        Leaflet-Karte
@@ -117,4 +124,4 @@ test/           Vitest-Tests
 - Import von Shapefile/DXF/GML (z. B. über `shpjs`) und Planauskunfts-Schnittstellen
 - Erfassen und Einmessen neuer Objekte direkt in AR
 - RTK-GNSS-Empfänger per Web Bluetooth für Zentimeter-Genauigkeit
-- Geländemodell (DGM) statt ebener Geländeoberkante
+- Hochauflösendes DGM (z. B. Land-/ALS-Daten 1 m) statt Copernicus

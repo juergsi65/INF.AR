@@ -66,7 +66,7 @@ function makeLabel(lines: string[], color: string): THREE.Sprite {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  const worldH = 0.22 * lines.length + 0.12;
+  const worldH = 0.15 * lines.length + 0.08;
   sprite.scale.set((worldH * canvas.width) / canvas.height, worldH, 1);
   sprite.renderOrder = 10;
   return sprite;
@@ -113,7 +113,13 @@ function material(color: string, opts: Partial<THREE.MeshStandardMaterialParamet
   });
 }
 
-export function buildScene(features: InfraFeature[], origin: LatLon): BuiltScene {
+/** Geländehöhe eines Stützpunkts relativ zur Projekt-Bezugshöhe (0, wenn unbekannt). */
+function groundAt(f: InfraFeature, i: number, refElev: number | null): number {
+  const e = f.properties.elev?.[i];
+  return refElev !== null && typeof e === "number" ? e - refElev : 0;
+}
+
+export function buildScene(features: InfraFeature[], origin: LatLon, refElev: number | null = null): BuiltScene {
   const root = new THREE.Group();
   root.name = "infra";
   const objects = new Map<string, THREE.Group>();
@@ -130,7 +136,8 @@ export function buildScene(features: InfraFeature[], origin: LatLon): BuiltScene
 
     if (f.geometry.type === "Point") {
       const [lon, lat] = f.geometry.coordinates;
-      const c = enuToVec(origin, lon, lat);
+      const gy = groundAt(f, 0, refElev);
+      const c = enuToVec(origin, lon, lat, gy);
       const r = Math.max(p.diameter, 300) / 2000;
       const d = Math.max(p.depth, 0.2);
 
@@ -138,28 +145,29 @@ export function buildScene(features: InfraFeature[], origin: LatLon): BuiltScene
         track(new THREE.CylinderGeometry(r, r, d, 32, 1, true)),
         track(material(color, { transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false })),
       );
-      wall.position.set(c.x, -d / 2, c.z);
+      wall.position.set(c.x, gy - d / 2, c.z);
       const floor = new THREE.Mesh(track(new THREE.CircleGeometry(r, 32)), track(material(color, { side: THREE.DoubleSide })));
       floor.rotation.x = -Math.PI / 2;
-      floor.position.set(c.x, -d, c.z);
+      floor.position.set(c.x, gy - d, c.z);
       const lid = new THREE.Mesh(
         track(new THREE.RingGeometry(r * 0.78, r * 1.08, 40)),
         track(new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide })),
       );
       lid.rotation.x = -Math.PI / 2;
-      lid.position.set(c.x, 0.02, c.z);
+      lid.position.set(c.x, gy + 0.02, c.z);
       const cover = new THREE.Mesh(
         track(new THREE.CircleGeometry(r * 0.78, 40)),
         track(new THREE.MeshBasicMaterial({ color: 0x37474f, transparent: true, opacity: 0.55, side: THREE.DoubleSide })),
       );
       cover.rotation.x = -Math.PI / 2;
-      cover.position.set(c.x, 0.015, c.z);
+      cover.position.set(c.x, gy + 0.015, c.z);
       g.add(wall, floor, lid, cover);
       labelPos = c;
     } else {
       const coords = f.geometry.coordinates;
       const depths = p.depths && p.depths.length === coords.length ? p.depths : coords.map(() => p.depth);
-      const ground = coords.map(([lon, lat]) => enuToVec(origin, lon, lat, 0.03));
+      const gys = coords.map((_, i) => groundAt(f, i, refElev));
+      const ground = coords.map(([lon, lat], i) => enuToVec(origin, lon, lat, gys[i] + 0.03));
 
       if (p.kind === "trasse") {
         const w = p.width ?? 1;
@@ -170,9 +178,10 @@ export function buildScene(features: InfraFeature[], origin: LatLon): BuiltScene
           const len = Math.hypot(b.x - a.x, b.z - a.z);
           if (len < 0.01) continue;
           const d = Math.max((depths[i - 1] + depths[i]) / 2, 0.1);
+          const gy = (gys[i - 1] + gys[i]) / 2;
           const box = new THREE.BoxGeometry(w, d, len + w * 0.02);
           box.rotateY(Math.atan2(b.x - a.x, b.z - a.z));
-          box.translate((a.x + b.x) / 2, -d / 2, (a.z + b.z) / 2);
+          box.translate((a.x + b.x) / 2, gy - d / 2, (a.z + b.z) / 2);
           parts.push(box);
         }
         if (parts.length) {
@@ -193,7 +202,7 @@ export function buildScene(features: InfraFeature[], origin: LatLon): BuiltScene
       } else {
         const minR = p.kind === "kabel" ? 0.025 : 0.04;
         const r = Math.max(p.diameter / 2000, minR);
-        const axis = coords.map(([lon, lat], i) => enuToVec(origin, lon, lat, -(depths[i] + r)));
+        const axis = coords.map(([lon, lat], i) => enuToVec(origin, lon, lat, gys[i] - (depths[i] + r)));
         const parts: THREE.BufferGeometry[] = [];
         for (let i = 1; i < axis.length; i++) parts.push(segmentCylinder(axis[i - 1], axis[i], r));
         for (const pt of axis) parts.push(jointSphere(pt, r));
@@ -203,7 +212,7 @@ export function buildScene(features: InfraFeature[], origin: LatLon): BuiltScene
 
         // Senkrechte Lotlinien an den Stützpunkten (Bezug zur Oberfläche)
         const plumb: number[] = [];
-        for (const pt of axis) plumb.push(pt.x, 0.03, pt.z, pt.x, pt.y + r, pt.z);
+        axis.forEach((pt, i) => plumb.push(pt.x, gys[i] + 0.03, pt.z, pt.x, pt.y + r, pt.z));
         const plumbGeo = track(new THREE.BufferGeometry());
         plumbGeo.setAttribute("position", new THREE.Float32BufferAttribute(plumb, 3));
         g.add(
@@ -226,10 +235,10 @@ export function buildScene(features: InfraFeature[], origin: LatLon): BuiltScene
     const label = makeLabel(describe(f), color);
     track(label.material.map!);
     track(label.material);
-    label.position.set(labelPos.x, 1.35, labelPos.z);
+    label.position.set(labelPos.x, labelPos.y + 1.35, labelPos.z);
     label.userData.isLabel = true;
     const stemGeo = track(
-      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(labelPos.x, 0, labelPos.z), new THREE.Vector3(labelPos.x, 1.15, labelPos.z)]),
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(labelPos.x, labelPos.y, labelPos.z), new THREE.Vector3(labelPos.x, labelPos.y + 1.15, labelPos.z)]),
     );
     const stem = new THREE.Line(stemGeo, track(new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })));
     stem.userData.isLabel = true;
