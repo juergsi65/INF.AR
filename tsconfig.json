@@ -11,5 +11,6 @@
     "resolveJsonModule": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "test"]
+  "include": ["src", "test"],
+  "exclude": ["test/worker.test.ts"]
 }

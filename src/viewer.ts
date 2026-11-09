@@ -82,7 +82,7 @@ export class Viewer {
 
     this.groundPlane = new THREE.Mesh(
       new THREE.CircleGeometry(60, 64),
-      new THREE.MeshBasicMaterial({ color: 0x6d7f5a, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: 0x6d7f5a, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
     );
     this.groundPlane.rotation.x = -Math.PI / 2;
 
@@ -99,7 +99,7 @@ export class Viewer {
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(0, -1, 0);
-    this.camera.position.set(-14, 16, 22);
+    this.camera.position.set(-16, 20, 26);
     this.controls.maxPolarAngle = Math.PI * 0.95;
     this.controls.update();
 

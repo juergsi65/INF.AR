@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "name": "Beispiel Leitungsdaten (Wien, Stephansplatz)",
+  "features": [
+    { "type": "Feature", "properties": { "name": "Gas ND DN150", "sparte": "Gas", "art": "Rohr", "tiefe": 1.0, "dn": 160, "material": "PE 100" },
+      "geometry": { "type": "LineString", "coordinates": [[16.37175, 48.20853], [16.37241, 48.20853]] } },
+    { "type": "Feature", "properties": { "name": "Wasser DN100", "sparte": "Wasser", "art": "Rohr", "tiefe": 1.4, "dn": 110 },
+      "geometry": { "type": "LineString", "coordinates": [[16.37175, 48.20855], [16.37221, 48.20855], [16.37227, 48.20858], [16.37227, 48.20876]] } },
+    { "type": "Feature", "properties": { "name": "NS-Kabel 4x150", "sparte": "Strom", "art": "Kabel", "tiefe": 0.8, "dn": 55 },
+      "geometry": { "type": "LineString", "coordinates": [[16.37175, 48.20847], [16.37215, 48.20847], [16.37215, 48.20831]] } },
+    { "type": "Feature", "properties": { "name": "LWL-Trasse", "sparte": "LWL", "art": "Trasse", "tiefe": 0.7, "breite": 0.6 },
+      "geometry": { "type": "LineString", "coordinates": [[16.37175, 48.20846], [16.37241, 48.20846]] } },
+    { "type": "Feature", "properties": { "name": "MW-Kanal DN300", "sparte": "Abwasser", "art": "Rohr", "tiefe": 2.2, "dn": 300, "depths": [2.0, 2.45] },
+      "geometry": { "type": "LineString", "coordinates": [[16.37181, 48.20849], [16.37238, 48.20849]] } },
+    { "type": "Feature", "properties": { "name": "Schacht S1", "sparte": "Kanal", "tiefe": 2.6, "durchmesser": 1000 },
+      "geometry": { "type": "Point", "coordinates": [16.37181, 48.20849] } },
+    { "type": "Feature", "properties": { "name": "Schacht S2", "sparte": "Kanal", "tiefe": 3.0, "durchmesser": 1000 },
+      "geometry": { "type": "Point", "coordinates": [16.37238, 48.20849] } }
+  ]
+}
